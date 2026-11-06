@@ -65,7 +65,19 @@ def serve(app: FastAPI, argv: list[str] | None, *, repo_root: Path) -> int:
     install_access_log_redaction_filter()
 
     try:
-        uvicorn.run(app, host=args.host, port=args.port, log_level="info")
+        # Trust X-Forwarded-* headers from any immediate upstream (reverse proxy
+        # / docker gateway) so request.url.scheme/port reflect the external
+        # https origin. Without this, the cross-site browser guard in
+        # src/api/security.py compares Origin:https port 443 against the
+        # backend's own http://...:port and rejects every non-GET request.
+        uvicorn.run(
+            app,
+            host=args.host,
+            port=args.port,
+            log_level="info",
+            proxy_headers=True,
+            forwarded_allow_ips="*",
+        )
     finally:
         if vite_proc:
             vite_proc.terminate()
